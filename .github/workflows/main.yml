@@ -15,23 +15,19 @@ jobs:
           # Install TightVNC Server with password set to 'admin123'
           choco install tightvnc -y --installargs '/quiet /norestart ADDLOCAL="Server" SERVER_REGISTER_AS_SERVICE=1 SERVER_ADD_FIREWALL_EXCEPTION=1 SET_USEVNCAUTHENTICATION=1 VALUE_OF_USEVNCAUTHENTICATION=1 SET_PASSWORD=1 VALUE_OF_PASSWORD=admin123 SET_ACCEPTHTTPCONNECTIONS=1 VALUE_OF_ACCEPTHTTPCONNECTIONS=0'
           
-          # Install Cloudflared (Python is already pre-installed on windows-2025)
+          # Install Cloudflared
           choco install cloudflared -y
 
       - name: Setup noVNC and Start Web Bridge
         shell: powershell
         run: |
-          # Use curl.exe -L to reliably follow GitHub redirects and download noVNC
-          curl.exe -L -s -o "C:\novnc.zip" "https://github.com"
-          
-          # Extract and rename folder
-          Expand-Archive -Path "C:\novnc.zip" -DestinationPath "C:\" -Force
-          Rename-Item -Path "C:\noVNC-1.5.0" -NewName "noVNC"
+          # Clone noVNC directly using git (avoids zip download/extraction errors)
+          git clone --depth 1 https://github.com C:\noVNC
 
           # Refresh environment variables
           $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
           
-          # Install websockify using pre-installed Python
+          # Install websockify
           python -m pip install --upgrade pip
           python -m pip install websockify
 
@@ -54,7 +50,7 @@ jobs:
           # Extract and display the clickable URL
           $logContent = Get-Content "C:\cf.log" -Raw
           if ($logContent -match "(https://[a-zA-Z0-9-]+\.trycloudflare\.com)") {
-              $url = $matches[0]
+              $url = $matches[1]
               Write-Host "=========================================================="
               Write-Host "OPEN THIS LINK IN YOUR BROWSER:"
               Write-Host "$url/vnc.html"
