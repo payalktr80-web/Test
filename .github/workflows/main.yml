@@ -18,31 +18,31 @@ jobs:
           # Install Cloudflared
           choco install cloudflared -y
 
-      - name: Setup noVNC and Start Web Bridge
+      - name: Setup noVNC and Websockify
         shell: powershell
         run: |
-          # Clone noVNC directly using git (avoids zip download/extraction errors)
+          # Clone noVNC directly using git
           git clone --depth 1 https://github.com C:\noVNC
 
-          # Refresh environment variables
-          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
-          
           # Install websockify
           python -m pip install --upgrade pip
           python -m pip install websockify
 
-          # Start TightVNC Service
-          Start-Service tvnserver
-
-          # Start websockify in the background on port 6080 pointing to VNC port 5900
-          Start-Process -NoNewWindow -FilePath "python" -ArgumentList "-m websockify --web C:\noVNC 6080 localhost:5900"
-          Start-Sleep -Seconds 5
-
-      - name: Start Cloudflare Tunnel and Keep Alive
+      - name: Start Services and Cloudflare Tunnel
         shell: powershell
         run: |
-          # Start cloudflared and log output to extract the URL
-          Start-Process -NoNewWindow -FilePath "cloudflared" -ArgumentList "tunnel --url http://localhost:6080 --logfile C:\cf.log"
+          # Refresh environment variables
+          $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
+          # 1. Start TightVNC Service
+          Start-Service tvnserver
+
+          # 2. Start websockify in THIS same step so GitHub Actions does not kill it
+          Start-Process -NoNewWindow -FilePath "python" -ArgumentList "-m websockify --web C:\noVNC 0.0.0.0:6080 127.0.0.1:5900"
+          Start-Sleep -Seconds 5
+
+          # 3. Start cloudflared pointing explicitly to 127.0.0.1:6080
+          Start-Process -NoNewWindow -FilePath "cloudflared" -ArgumentList "tunnel --url http://127.0.0.1:6080 --logfile C:\cf.log"
           
           Write-Host "Waiting for Cloudflare Tunnel URL..."
           Start-Sleep -Seconds 10
@@ -50,7 +50,7 @@ jobs:
           # Extract and display the clickable URL
           $logContent = Get-Content "C:\cf.log" -Raw
           if ($logContent -match "(https://[a-zA-Z0-9-]+\.trycloudflare\.com)") {
-              $url = $matches[1]
+              $url = $matches
               Write-Host "=========================================================="
               Write-Host "OPEN THIS LINK IN YOUR BROWSER:"
               Write-Host "$url/vnc.html"
@@ -61,6 +61,6 @@ jobs:
               Get-Content "C:\cf.log"
           }
 
-          # Keep the runner alive for up to 5.5 hours
+          # Keep both websockify and cloudflared alive for up to 5.5 hours
           Start-Sleep -Seconds 19800
           
